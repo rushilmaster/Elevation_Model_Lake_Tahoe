@@ -1,0 +1,360 @@
+// -------------------------------------------------------------------	
+// Department of Electrical and Computer Engineering
+// University of Waterloo
+//
+// Student Name:     <Rushil Master>
+// Userid:           <20476854>
+//
+// Assignment:       Programming Assignment 3 - Fall 2012
+// Submission Date:  <November 16, 2012>
+// 
+// I declare that, other than the acknowledgements listed below, 
+// this program is my original work.
+//
+// Acknowledgements:
+// -------------------------------------------------------------------
+
+using System;
+using System.IO;
+
+class LakeTahoe
+{
+	//This main method will be the entry point and will call the other two 
+	//classes when needed.
+	static void Main()
+	{ 
+		//Create a new object of the type Elevation model and instantiate it.
+		//Also, a new array is created of type GridPoint.
+		ElevationModel elevation = new ElevationModel("LakeTahoeDEM.csv");
+		GridPoint[] WrongPoints = elevation.GetOutliers();
+		
+		//Next 5 statements print out the necessary headings along with the
+		//amount of rows and columns.
+		Console.WriteLine("\nLake Tahoe Digital Elevation Model");
+		Console.WriteLine("	   Rows:  {0}", elevation.Rows);
+		Console.WriteLine("	Columns:  {0}\n", elevation.Columns);
+		
+		Console.WriteLine("Detected Outlier Cells");
+		Console.WriteLine("	Elevation	DEM Grid Cell	Problem");
+		
+		//This loop helps determining the size of the array "WrongPoints" so 
+		//that the length could be used in the following three for loops.
+		int A = 0;
+		do
+		{
+			A++;
+		}while(WrongPoints[A] != null);
+		
+		//This for loop will print out the detected outlier cells. Within the 
+		//loop there exists a decision making statement which determines 
+		//whether the incorrection is due to a Bird or Fish.
+		for(int i = 0; i < A ; i++)
+		{
+			Console.WriteLine("	{0,6:f1} m 	{1} 	{2}", 
+			elevation.Elevation(WrongPoints[i].Row,WrongPoints[i].Column),
+			WrongPoints[i], elevation.Elevation(WrongPoints[i].Row,
+			WrongPoints[i].Column) > 100 ? "Bird" : "Fish");
+		}  
+		
+		//This for loop calls the Smoothlier method and passes the WrongPoints
+		//as the parameter so that it can be fixed.
+		for (int i = 0; i < A; i++)
+		{
+			elevation.SmoothOutlier(WrongPoints[i]);
+		} 
+		
+		//Prints out the heading for Corrected Outlier cells
+		Console.WriteLine("\nCorrected Outlier Cells");
+		Console.WriteLine("	Elevation	DEM Grid Cell");
+		
+		//This for loop will print out the corrected outlier cells by calling
+		//the Elevation method and passing the row and column as parameter.
+		for (int i = 0; i < A; i++)
+		{
+			Console.WriteLine("	{0,6:f1} m 	{1:10} ",
+			elevation.Elevation(WrongPoints[i].Row,WrongPoints[i].Column),
+			WrongPoints[i],
+			elevation.Elevation(WrongPoints[i].Row, WrongPoints[i].Column));
+		} 
+		
+		//This will call the WriteDEM method so that the "NewLakeTahoeDEM.csv"
+		//file can be created with the corrected elevations.
+		elevation.WriteDEM("NewLakeTahoeDEM.csv");
+		
+		//The statements below will put the headings and call the Area and 
+		//volume method to print out the Lake size estimates.
+		Console.WriteLine("\nLake Size Estimates");
+		double Lakearea = elevation.Area(0);
+		Console.WriteLine("	  Area: {0:f0} squre km", Lakearea);
+		
+		double Lakevolume = elevation.Volume(0);
+		Console.WriteLine("	Volume: {0:f0} cubic km", Lakevolume);
+	} 
+} 
+
+class GridPoint
+{ 
+	//These private readonly fields represent the row and column position of
+	//one grid location.
+	readonly int row;
+	readonly int column;
+	
+	//This constructor initiazlizes the row and column position of the grid
+	//point to the values passed as paramters.
+	public GridPoint(int row, int column)
+	{
+		this.row = row;
+		this.column = column;
+	}
+	
+	//These public accssor properties return the row and column postions, of 
+	//the grid point. 
+	public int Row 
+	{
+		get
+		{ 
+			return row;
+		}
+	}
+	
+	public int Column
+	{
+		get
+		{
+			return column;
+		}
+	}
+	
+	//This ToString method returns a compact reprsentation of the grid point's
+	//location. A fixed width of four characters is used for the row and 
+	//column values.
+	public override string ToString()
+	{
+		return string.Format("({0}, {1,4})", row, column);
+	} 
+} 
+
+class ElevationModel
+{
+	//This two dimensional array holds the elevation in meters at each
+	//grid-point location.
+	double[ , ] elevations;
+	
+	//This constructor will call the ReadDEM method to read the file indicated
+	//by the parameter and initialize the elevations array with the data 
+	//contained in the file.
+	public ElevationModel(string inFileName)
+	{
+		int row, column;
+		string Content;
+		string[] DataArray;
+		
+		StreamReader inputFile = new StreamReader("LakeTahoeDEM.csv");
+		row = int.Parse(inputFile.ReadLine());
+		column = int.Parse(inputFile.ReadLine());
+		
+		elevations = new double [row, column];
+		
+		for (int r = 0; r < row; r++)
+		{
+			Content = inputFile.ReadLine();
+			for (int c = 0; c < column; c++)
+			{
+				DataArray = Content.Split(',');
+				elevations[r,c] = double.Parse(DataArray[c]);
+			}
+		}
+	} 
+	
+	//These accessor properties return the number of row and columns of the 
+	//DEM held by this ElevationModel instance.
+	public int Rows
+	{
+		get
+		{
+			return elevations.GetLength(0);
+		}
+	}
+	public int Columns
+	{
+		get
+		{
+			return elevations.GetLength(1);
+		}
+	}
+	
+	//This method returns the elevation at the grid-point location specified
+	//by the row and column parameters.
+	public double Elevation(int row, int column)
+	{
+		return elevations[row,column];
+	} 
+	
+	//This method reads the file indicated by the parameter and creates the 
+	//array of elevations specified by the DEM stored in the file. The file
+	//is closed after the reading is done.
+	void ReadDEM(string inFileName)
+	{
+		try
+		{
+			StreamReader inputFile = new StreamReader(inFileName);
+			double rows, columns;
+			rows = double.Parse(inputFile.ReadLine());
+			columns = double.Parse(inputFile.ReadLine());
+			elevations = new double[(int) rows, (int)columns];
+			
+			inputFile.Close();
+		} catch (Exception e)
+		
+		{
+			Console.WriteLine("There was an error: ", e.Message);
+		} 
+	} 
+	
+	//This method writes the DEM data to the file indicated by the parameters.
+	//The file is closed after the data has been written.
+	public void WriteDEM(string outputFile)
+	{
+		StreamWriter outFile = new StreamWriter("NewLakeTahoeDEM.csv");
+		outFile.WriteLine(Rows);
+		outFile.WriteLine(Columns);
+		
+		for (int r = 0; r < Rows; r++)
+		{
+			for (int c = 0; c < Columns; c++)
+			{
+				outFile.Write("{0}, ", Elevation(r,c));
+			} 
+			outFile.WriteLine();
+		} 
+		outFile.Close();
+	} 
+	
+	//This public instance method returns an array containing the locations
+	//of potentially wrong elevations using the averages of the surrounding 
+	//elevations. If there are no wrong elevations detected, then an array 
+	//of size zero is returned.
+	public GridPoint[] GetOutliers()
+	{
+		GridPoint P;
+		GridPoint[] Liers;
+		int counter = 0;
+		int point = 0;
+		int row = elevations.GetLength(0);
+		int column = elevations.GetLength(1);
+		
+		for (int tempRow = 1; tempRow < row - 1; tempRow++)
+		{
+			for(int tempColumn = 1; tempColumn < column - 1; tempColumn++)
+			{
+				double Average;
+				
+				Average = (elevations[tempRow - 1, tempColumn - 1] + 
+				elevations[tempRow - 1, tempColumn] + 
+				elevations[tempRow - 1, tempColumn + 1] +
+				elevations[tempRow , tempColumn + 1] +
+				elevations[tempRow, tempColumn - 1] +
+				elevations[tempRow + 1, tempColumn - 1] +
+				elevations[tempRow + 1, tempColumn] +
+				elevations[tempRow + 1, tempColumn + 1]) / 8; 
+				
+				if (Math.Abs(Average) > 100)
+				{
+					counter++;
+				}
+			} 
+		} 
+		
+		Liers = new GridPoint[counter];
+		
+		for (int tempRow = 1; tempRow < row - 1; tempRow++)
+		{
+			for(int tempColumn = 1; tempColumn < column - 1; tempColumn++)
+			{
+				double Average;
+				
+				Average = (elevations[tempRow - 1, tempColumn - 1] + 
+				elevations[tempRow - 1, tempColumn] + 
+				elevations[tempRow - 1, tempColumn + 1] +
+				elevations[tempRow , tempColumn + 1] +
+				elevations[tempRow, tempColumn - 1] +
+				elevations[tempRow + 1, tempColumn - 1] +
+				elevations[tempRow + 1, tempColumn] +
+				elevations[tempRow + 1, tempColumn + 1]) / 8; 
+				
+				if (Math.Abs((elevations[tempRow,tempColumn]-(Average))) > 100)
+				{
+					P = new GridPoint(tempRow,tempColumn);
+					Liers[point] = P;
+					point++;
+				}
+			} 
+		} 
+		return Liers;
+	}
+	
+	//This SmoothOutLier method will correct the wrong elevations detected in
+	//the GetOutLier method. It does it by taking average elevations of the 
+	//surrounding grid points.
+	public void SmoothOutlier(GridPoint gridPoint)
+	{
+		double AverageElevation;
+		int tempRow = gridPoint.Row;
+		int tempColumn = gridPoint.Column;
+		
+		AverageElevation = (elevations[tempRow - 1, tempColumn - 1] + 
+				elevations[tempRow - 1, tempColumn] + 
+				elevations[tempRow - 1, tempColumn + 1] +
+				elevations[tempRow , tempColumn + 1] +
+				elevations[tempRow, tempColumn - 1] +
+				elevations[tempRow + 1, tempColumn - 1] +
+				elevations[tempRow + 1, tempColumn] +
+				elevations[tempRow + 1, tempColumn + 1]) / 8; 
+				
+		elevations[tempRow,tempColumn] = AverageElevation;
+	}
+	
+	//This method returns the area represented by the set of DEM cells 
+	//which have elevations at or below the limit passed as a parameter. 
+	//This is done by making a nested for loop and updating the area every time
+	//the loop runs.
+	public double Area(double limit)
+	{
+		double LakeArea = 0;
+		
+		for (int r = 0; r < Rows; r++)
+		{
+			for (int c = 0; c < Columns; c++)
+			{
+				if(Elevation(r,c) <= limit)
+				{
+					LakeArea += 100*100;
+				}
+			}
+		} 
+		
+		return LakeArea/1000000d;
+	}
+	
+	//This method returns the volume represented by the set of DEM cells which
+	//have elevations at or below the limit passed as a paramter. The volume
+	//is calculated in similar style as Area, with the change being multiplying
+	//by elevation at each point. 
+	public double Volume(double limit)
+	{
+		double LakeVolume = 0;
+		
+		for (int r = 0; r < Rows; r++)
+		{
+			for (int c = 0; c < Columns; c++)
+			{
+				if(Elevation(r,c) <= limit)
+				{
+					LakeVolume += 100*100*(Math.Abs(Elevation(r,c)));
+				}
+			}
+		} 
+		
+		return LakeVolume/1000000000d;
+	}
+}
